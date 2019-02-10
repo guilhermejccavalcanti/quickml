@@ -9,7 +9,6 @@ import quickml.supervised.classifier.Classifier;
 import quickml.supervised.classifier.decisionTree.Tree;
 import quickml.supervised.classifier.decisionTree.TreeBuilder;
 import quickml.supervised.classifier.decisionTree.tree.attributeIgnoringStrategies.IgnoreAttributesWithConstantProbability;
-
 import java.io.Serializable;
 import java.util.HashSet;
 import java.util.List;
@@ -32,13 +31,17 @@ public class RandomForestBuilder<T extends ClassifierInstance> implements Predic
     public static final String NUM_TREES = "numTrees";
 
     private static final Logger logger = LoggerFactory.getLogger(RandomForestBuilder.class);
+
     private final TreeBuilder<T> treeBuilder;
+
     private int numTrees = 8;
+
     private int executorThreadCount = Runtime.getRuntime().availableProcessors();
+
     private ExecutorService executorService;
 
     public RandomForestBuilder() {
-        this(new TreeBuilder<T>().attributeIgnoringStrategy(new IgnoreAttributesWithConstantProbability(0.7)).minCategoricalAttributeValueOccurances(11).maxDepth(16));
+        this(new TreeBuilder<T>().attributeIgnoringStrategy(new IgnoreAttributesWithConstantProbability(0.7)).minCategoricalAttributeValueOccurances(11).maxDepth(5));
     }
 
     public RandomForestBuilder(TreeBuilder<T> treeBuilder) {
@@ -48,8 +51,9 @@ public class RandomForestBuilder<T extends ClassifierInstance> implements Predic
     @Override
     public void updateBuilderConfig(Map<String, Object> config) {
         treeBuilder.updateBuilderConfig(config);
-        if (config.containsKey(NUM_TREES))
+        if (config.containsKey(NUM_TREES)) {
             this.numTrees((Integer) config.get(NUM_TREES));
+        }
     }
 
     public RandomForestBuilder<T> numTrees(int numTrees) {
@@ -66,16 +70,11 @@ public class RandomForestBuilder<T extends ClassifierInstance> implements Predic
     public RandomForest buildPredictiveModel(Iterable<T> trainingData) {
         executorService = Executors.newFixedThreadPool(executorThreadCount);
         logger.info("Building random forest with {} trees", numTrees);
-
         List<Future<Tree>> treeFutures = Lists.newArrayListWithCapacity(numTrees);
         List<Tree> trees = Lists.newArrayListWithCapacity(numTrees);
-
-        // Submit all tree building jobs to the executor
         for (int treeIndex = 0; treeIndex < numTrees; treeIndex++) {
             treeFutures.add(submitTreeBuild(trainingData, treeIndex));
         }
-
-        // Collect all completed trees. Will block until complete
         collectTreeFutures(trees, treeFutures);
         Set<Serializable> classifications = new HashSet<>();
         for (Tree tree : trees) {
@@ -86,6 +85,7 @@ public class RandomForestBuilder<T extends ClassifierInstance> implements Predic
 
     private Future<Tree> submitTreeBuild(final Iterable<T> trainingData, final int treeIndex) {
         return executorService.submit(new Callable<Tree>() {
+
             @Override
             public Tree call() throws Exception {
                 return buildModel(trainingData, treeIndex);
@@ -98,12 +98,10 @@ public class RandomForestBuilder<T extends ClassifierInstance> implements Predic
         return treeBuilder.copy().buildPredictiveModel(trainingData);
     }
 
-
     protected void collectTreeFutures(List<Tree> trees, List<Future<Tree>> treeFutures) {
         for (Future<Tree> treeFuture : treeFutures) {
             collectTreeFutures(trees, treeFuture);
         }
-
         executorService.shutdown();
     }
 
